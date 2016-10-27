@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
-# known issus 1: if 0xaa is in the payload, the message will be dropped 
+# Author: Yunfei
+# Version: v0.1
+#
+# notes:
+#
+# issues:
+# Known issus 1: if data 0xaa is in the payload, the message will be dropped
+# Known issus 2: message from miniAHRS is not valid with checksum
+  
 import serial, socket, threading
 import codecs
 import binascii
@@ -16,6 +24,7 @@ AHRS_COMM_END = 0xAA
 
 def print_debug_msg(msg):
     print(msg)
+    #pass
    
 
 def print_hex(hex_bytearray):
@@ -28,9 +37,9 @@ class miniAHRS:
         self._pitch = 0.0
         self._roll = 0.0
         
-        self._acc = 0.0
-        self._gyo = 0.0
-        self._mag = 0.0
+        self._acc = [0.0, 0.0, 0.0]
+        self._gyo = [0.0, 0.0, 0.0]
+        self._mag = [0.0, 0.0, 0.0]
 
         self.comm_buff = bytearray()
 
@@ -40,7 +49,7 @@ class miniAHRS:
 
         
     def get_ahrs(self):
-        return (self._pitch, self._roll, self._yaw)
+        return (self._roll, self._pitch, self._yaw)
 
     
     # the miniAHRS has a bug for negative number
@@ -93,13 +102,25 @@ class miniAHRS:
                 if (msg_len == packet_len):
                     print_hex(msg_payload)
                     msg_fun = msg_payload[1]
-                    # decode message
+                    # decode AHRS message
                     if (msg_fun == 0xA1):               
                         self._yaw = self.correct_data((msg_payload[2] << 8) + msg_payload[3])
                         self._pitch = self.correct_data((msg_payload[4] << 8) + msg_payload[5])
                         self._roll = self.correct_data((msg_payload[6] << 8) + msg_payload[7])
+                    # decode raw message
                     elif (msg_fun == 0xA2):
-                        pass
+                        # acc
+                        self._acc[0] = self.correct_data((msg_payload[2] << 8) + msg_payload[3])
+                        self._acc[1] = self.correct_data((msg_payload[4] << 8) + msg_payload[5])
+                        self._acc[2] = self.correct_data((msg_payload[6] << 8) + msg_payload[7])
+                        # gyo
+                        self._gyo[0] = self.correct_data((msg_payload[8] << 8) + msg_payload[9])
+                        self._gyo[1] = self.correct_data((msg_payload[10] << 8) + msg_payload[11])
+                        self._gyo[2] = self.correct_data((msg_payload[12] << 8) + msg_payload[13])
+                        # mag
+                        self._mag[0] = self.correct_data((msg_payload[14] << 8) + msg_payload[15])
+                        self._mag[1] = self.correct_data((msg_payload[16] << 8) + msg_payload[17])
+                        self._mag[2] = self.correct_data((msg_payload[18] << 8) + msg_payload[19])
                     else:
                         print_debug_msg('::err: undefined message type')
                 # see 'known issue 1'
@@ -144,9 +165,10 @@ if __name__ == '__main__':
             data = ser.read(100)
             if len(data) > 0:
                 ahrs.decode(data)
-                (pitch, roll, yaw) = ahrs.get_ahrs()
-                print((pitch, roll, yaw))
-                print('\r\n')
+                (roll, pitch, yaw) = ahrs.get_ahrs()
+                (acc, gyo, mag) = ahrs.get_raw_data()
+                print('x:{0}, y:{1}, z:{2};'.format(pitch, roll, yaw) )       
+                
                 #b = bytearray()
                 #b.extend('{} {} {}\n'.format(yaw, pitch, roll).encode())
                 #print_debug_msg(b)
