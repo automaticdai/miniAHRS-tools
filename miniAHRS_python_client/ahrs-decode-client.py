@@ -3,12 +3,16 @@
 # Version: v0.1
 #
 # notes:
+# 1. This python script will gather data from miniAHRS at port 'COM_PORT'. The 
+# gathered data will be sent to "HOST, PORT". 
+# 2. To run this script, the miniAHRS should be connencted by a usb-to-serial
+# and a TCP server at "host" is also expected.
 #
 # issues:
 # Known issus 1: if data 0xaa is in the payload, the message will be dropped
 # Known issus 2: message from miniAHRS is not valid with checksum
   
-import serial, socket, threading
+import serial, socket, threading, sys
 import codecs
 import binascii
 
@@ -156,23 +160,22 @@ if __name__ == '__main__':
     
     ahrs = miniAHRS()
 
-    #s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #s.connect((HOST, PORT))
-    #s.sendall(b'\n--------------------------------------\n')
-    
-    with serial.Serial(COM_PORT, 115200, timeout = 0.02) as ser:
-        while True:
-            data = ser.read(100)
-            if len(data) > 0:
-                ahrs.decode(data)
-                (roll, pitch, yaw) = ahrs.get_ahrs()
-                (acc, gyo, mag) = ahrs.get_raw_data()
-                print('x:{0}, y:{1}, z:{2};'.format(pitch, roll, yaw) )       
-                
-                #b = bytearray()
-                #b.extend('{} {} {}\n'.format(yaw, pitch, roll).encode())
-                #print_debug_msg(b)
-                #s.sendall(b)
-
-    #s.close()
-    
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((HOST, PORT))
+        
+        with serial.Serial(COM_PORT, 115200, timeout = 0.02) as ser:
+            while True:
+                data = ser.read(100)
+                if len(data) > 0:
+                    ahrs.decode(data)
+                    (roll, pitch, yaw) = ahrs.get_ahrs()
+                    (acc, gyo, mag) = ahrs.get_raw_data()
+                    # build a packet and send out
+                    b = bytearray()
+                    b.extend('{},{},{}\n'.format(roll, pitch, yaw).encode())
+                    print_debug_msg(b)
+                    s.sendall(b)
+    except:
+        print("Unexpected error:", sys.exc_info()[0])
+        s.close()
